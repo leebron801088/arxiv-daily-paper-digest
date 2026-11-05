@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.DS_Store
+.env
+.env.*
+.arxiv-digest-state/
+state/
+reports/
+/candidates.json
+/editorial.json
+/delivery.json
+*.pdf
