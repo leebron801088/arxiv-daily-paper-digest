@@ -32,7 +32,8 @@ W, H = A4
 MARGIN = 54
 WIDTH = W - 2 * MARGIN
 LABEL = 91
-FLOOR = 54
+FLOOR = 49
+CARD_GAP = 13
 SECTIONS = [('problem', '研究问题'), ('method', '核心方法'), ('innovation', '主要创新'),
             ('actual_work', '它到底做了什么'), ('takeaway', '借鉴点'), ('caution', '阅读注意')]
 NUMERALS = '一二三四五'
@@ -79,14 +80,15 @@ def register_styles(font=None, font_index=0):
         pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))
         body = bold = 'STSong-Light'
     return {
-        'headline': ParagraphStyle('headline', fontName=bold, fontSize=26, leading=31, alignment=TA_CENTER, textColor=TEXT, wordWrap='CJK'),
-        'band': ParagraphStyle('band', fontName=bold, fontSize=14, leading=20, textColor=TEXT, wordWrap='CJK'),
-        'tag': ParagraphStyle('tag', fontName=bold, fontSize=9, leading=13, textColor=TEAL, wordWrap='CJK'),
-        'title': ParagraphStyle('title', fontName='Helvetica-Bold', fontSize=13, leading=17, textColor=TEXT),
-        'field': ParagraphStyle('field', fontName=bold, fontSize=9.8, leading=16, textColor=MUTED, wordWrap='CJK'),
-        'body': ParagraphStyle('body', fontName=body, fontSize=11.1, leading=17.5, textColor=TEXT, wordWrap='CJK'),
-        'note': ParagraphStyle('note', fontName=body, fontSize=9.6, leading=15, textColor=MUTED, wordWrap='CJK'),
-        'meta': ParagraphStyle('meta', fontName=body, fontSize=10, leading=15.5, textColor=MUTED, wordWrap='CJK'),
+        'headline': ParagraphStyle('headline', fontName=bold, fontSize=22, leading=28, alignment=TA_CENTER, textColor=TEXT, wordWrap='CJK'),
+        'subtitle': ParagraphStyle('subtitle', fontName=body, fontSize=8.7, leading=12, alignment=TA_CENTER, textColor=MUTED, wordWrap='CJK'),
+        'band': ParagraphStyle('band', fontName=bold, fontSize=12.4, leading=17, textColor=TEXT, wordWrap='CJK'),
+        'tag': ParagraphStyle('tag', fontName=bold, fontSize=8.7, leading=11, textColor=TEAL, wordWrap='CJK'),
+        'title': ParagraphStyle('title', fontName='Helvetica-Bold', fontSize=10.6, leading=13.2, textColor=TEXT),
+        'field': ParagraphStyle('field', fontName=bold, fontSize=8.5, leading=10.8, textColor=MUTED, wordWrap='CJK'),
+        'body': ParagraphStyle('body', fontName=body, fontSize=9.3, leading=12.2, textColor=TEXT, wordWrap='CJK'),
+        'note': ParagraphStyle('note', fontName=body, fontSize=9, leading=13, textColor=MUTED, wordWrap='CJK'),
+        'meta': ParagraphStyle('meta', fontName=body, fontSize=8.7, leading=11, textColor=MUTED, wordWrap='CJK'),
     }
 
 
@@ -118,32 +120,31 @@ def card(paper, item, order, styles):
     for label, value, role in fields:
         left = paragraph(label, styles['field'], LABEL - 9)
         right = paragraph(value, styles['meta' if role == 'link' else role], WIDTH - LABEL, markup=role == 'link')
-        rows.append((left, right, max(left[1], right[1]) + (8 if role == 'body' else 4)))
-    head_height = max(title[1], tag[1] + 8) + 13
-    return tag, title, rows, head_height, head_height + sum(row[2] for row in rows) + 18
+        rows.append((left, right, max(left[1], right[1]) + (1.7 if role == 'body' else 1.1)))
+    head_height = max(title[1], tag[1] + 6) + 6
+    return tag, title, rows, head_height, head_height + sum(row[2] for row in rows) + CARD_GAP
 
 
-def header(c, date, number, title, note, snapshot, count, styles, continued):
+def header(c, date, number, title, note, complete, count, styles, continued):
     text, height = paragraph(f'{date.year}.{date.month}.{date.day} 论文推送', styles['headline'], WIDTH)
-    draw(text, c, MARGIN, H - 41, height)
-    c.setFont('Helvetica', 8.3)
-    c.setFillColor(MUTED)
-    c.drawCentredString(W / 2, H - 88, 'DAILY RESEARCH DIGEST   |   arXiv PDF direct links')
-    y = H - 106
+    draw(text, c, MARGIN, H - 32, height)
+    subtitle, sh = paragraph('arXiv 论文  |  摘要与 PDF 直链', styles['subtitle'], WIDTH)
+    draw(subtitle, c, MARGIN, H - 67, sh)
+    y = H - 93
     topic, ht = paragraph(f'{NUMERALS[number]}、{title}' + ('（续）' if continued else ''), styles['band'], WIDTH - 32)
-    box = max(39, ht + 20)
+    box = max(38, ht + 16)
     c.setFillColor(BAND)
     c.roundRect(MARGIN, y - box, WIDTH, box, 5, stroke=0, fill=1)
     c.setFillColor(STRIPE)
     c.roundRect(MARGIN, y - box, 4, box, 2, stroke=0, fill=1)
     draw(topic, c, MARGIN + 15, y - (box - ht) / 2, ht)
-    y -= box + 13
-    details = f'本期收录 {count} 篇。{note}'
-    if not snapshot.get('complete'):
-        details += ' 检索覆盖可能不完整。'
+    y -= box + 10
+    details = f'说明  本期收录 {count} 篇。{note}'
+    if not complete:
+        details += ' 本主题检索覆盖可能不完整。'
     detail, dh = paragraph(details, styles['note'], WIDTH)
     draw(detail, c, MARGIN, y, dh)
-    return y - dh - 27
+    return y - dh - 17
 
 
 def footer(c, page, snapshot, styles):
@@ -176,24 +177,31 @@ def render(snapshot, editorial, path, delivery_path=None, *, history=None, font=
         for number, (topic, definition) in enumerate(TOPICS.items()):
             entries = grouped[topic]
             note = editorial.get('notes', {}).get(topic, definition['focus'])
-            y = header(c, now.astimezone(TZ), number, definition['title'], note, snapshot, len(entries), styles, False)
+            complete = snapshot.get('coverage', {}).get(topic, {}).get('complete', snapshot.get('complete'))
+            c.bookmarkPage(topic)
+            c.addOutlineEntry(definition['title'], topic)
+            y = header(c, now.astimezone(TZ), number, definition['title'], note, complete, len(entries), styles, False)
             if not entries:
                 message = '本期未收录论文。已推送、超过首发时间窗口或相关性不足的论文均不纳入。'
-                if not snapshot.get('coverage', {}).get(topic, {}).get('complete', snapshot.get('complete')):
+                if not complete:
                     message = '本主题未完成充分检索；暂未收录已核实的论文。'
                 p, ht = paragraph(message, styles['body'], WIDTH)
                 draw(p, c, MARGIN, y, ht)
-            for order, (paper, item) in enumerate(entries, 1):
-                tag, title, rows, head_height, total = card(paper, item, order, styles)
-                if y - total < FLOOR and order > 1:
+            cards = [card(paper, item, order, styles) for order, (paper, item) in enumerate(entries, 1)]
+            extra_gap = 0
+            if len(cards) > 1:
+                remaining = y - FLOOR - sum(layout[-1] for layout in cards)
+                extra_gap = min(18, max(0, remaining / (len(cards) - 1)))
+            for index, (tag, title, rows, head_height, total) in enumerate(cards):
+                if y - total < FLOOR and index > 0:
                     page += 1
                     footer(c, page, snapshot, styles)
-                    y = header(c, now.astimezone(TZ), number, definition['title'], note, snapshot, len(entries), styles, True)
+                    y = header(c, now.astimezone(TZ), number, definition['title'], note, complete, len(entries), styles, True)
                 if y - total < FLOOR:
-                    raise ValueError(f'{paper["arxiv_base_id"]}: entry is too long for one page')
+                    raise ValueError(f'{entries[index][0]["arxiv_base_id"]}: entry is too long for one page')
                 c.setFillColor(PILL)
-                c.roundRect(MARGIN, y - tag[1] - 8, LABEL - 11, tag[1] + 8, 4, stroke=0, fill=1)
-                draw(tag[0], c, MARGIN + 6, y - 4, tag[1])
+                c.roundRect(MARGIN, y - tag[1] - 6, LABEL - 11, tag[1] + 6, 4, stroke=0, fill=1)
+                draw(tag[0], c, MARGIN + 6, y - 3, tag[1])
                 draw(title[0], c, MARGIN + LABEL, y, title[1])
                 y -= head_height
                 for (left, lh), (right, rh), height in rows:
@@ -202,8 +210,10 @@ def render(snapshot, editorial, path, delivery_path=None, *, history=None, font=
                     y -= height
                 c.setStrokeColor(RULE)
                 c.setLineWidth(.65)
-                c.line(MARGIN, y - 6, W - MARGIN, y - 6)
-                y -= 18
+                c.line(MARGIN, y - 4, W - MARGIN, y - 4)
+                y -= CARD_GAP
+                if index < len(cards) - 1:
+                    y -= extra_gap
             page += 1
             footer(c, page, snapshot, styles)
         c.save()

@@ -1,1 +1,2 @@
-reportlab>=4
+reportlab==4.4.9; python_version < "3.10"
+reportlab>=4; python_version >= "3.10"
